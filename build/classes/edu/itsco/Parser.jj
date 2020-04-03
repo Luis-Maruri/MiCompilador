@@ -1,0 +1,261 @@
+options {
+  LOOKAHEAD = 1;
+  STATIC = true;
+  IGNORE_CASE = false;
+}
+
+PARSER_BEGIN(MiCompilador)
+
+package edu.itsco;
+
+import java.util.List;
+import java.util.ArrayList;
+
+public class MiCompilador {
+
+  public static List<Variable> variables;
+
+  public static void main(String args[]) 
+    throws ParseException,SemanticException {
+    variables = new ArrayList<Variable>();
+    MiCompilador parser = new MiCompilador(System.in);
+    System.out.println("Bienvenidos al Compilador");
+    //parser.gramaticaImprimir();
+    //parser.gramaticaDeclararVariable();
+    parser.gramaticaPrincipal();
+    System.out.println("Compilo correctamente");
+  }
+
+  public static void addVariable(Variable v) throws
+    SemanticException{
+    if(!variables.contains(v)){
+        variables.add(v);
+    }else{
+        throw new SemanticException(v.getId(),
+            SemanticException.VARIABLE_DUPLICADA);
+    }
+  }
+
+  public static void variableExiste(Variable v) throws
+    SemanticException{
+     if(!variables.contains(v)){
+        throw new SemanticException(v.getId(),
+            SemanticException.VARIABLE_NO_DEFINIDA);
+     }
+  }
+
+  public static void tipoDeDato(Variable v, String tipoDato)
+  throws SemanticException{
+      Variable vBuscar = variables.get(variables.indexOf(v));
+      if(!vBuscar.getTipoDato().equals(tipoDato))
+        throw new SemanticException(v.getId(),
+            SemanticException.TIPOS_NO_COINCIDEN);
+  
+  }
+
+}
+
+PARSER_END(MiCompilador)
+
+SKIP:{
+    "\n"
+    |"\r"
+    |"\t"
+    |" "
+}
+
+TOKEN:{
+    <INICIO: "inicio">
+    |<FIN: "fin">
+
+    |<ENTERO: "entero">
+    |<DECIMAL: "decimal">
+    |<CADENA: "cadena">
+
+    |<IMPRIMIR: "imprimir">
+    |<LEER: "leer">
+
+    |<SI: "si">
+    |<ENTONCES: "entonces">
+    |<SINO: "sino">
+
+    |<PARA: "para">
+    |<HASTA: "hasta">
+    |<SIGUIENTE: "siguiente">
+
+    |<MIENTRAS: "mientras">
+    |<HACER: "hacer">
+}
+
+TOKEN:{
+    <IGUAL: "=">
+    |<MAS: "+">
+    |<MENOS: "-">
+    |<ENTRE: "/">
+    |<MULTI: "*">
+    |<MOD: "mod">
+
+    |<MAYOR: ">">
+    |<MENOR: "<">
+    
+    |<AND: "&&">
+    |<OR: "||">
+    |<NOT: "!">
+
+    |<OPK: "{">
+    |<CLK: "}">
+
+    |<OPP: "(">
+    |<CLP: ")">
+}
+
+TOKEN: {
+    <#digito: ["0"-"9"]>
+    |<#letra: ["a"-"z","A"-"Z"]>
+
+    |<VALOR_ENTERO: (<digito>)+ >
+    |<VALOR_DECIMAL: (<digito>)+"." (<digito>)+ >
+    |<VALOR_CADENA: "\"" (~["\""])+ "\"" >  
+
+    |<ID: ("_"|<letra>) ("_" | <letra> | <digito>)* >
+}
+
+void gramaticaImprimir() throws SemanticException:{
+    //Codigo Java
+    Token id; 
+}{
+    <IMPRIMIR> <OPP> ( valores()| id = <ID> {
+                        Variable v = new Variable();
+                        v.setId(id.image);
+                        variableExiste(v);
+                    } )
+        (<MAS> (valores() | id = <ID> {
+                        Variable v = new Variable();
+                        v.setId(id.image);
+                        variableExiste(v);
+                    }  ))*
+    <CLP>
+}
+
+void valores():{
+}{
+    <VALOR_CADENA> | <VALOR_ENTERO> | <VALOR_DECIMAL>
+}
+
+//En esta gramatica se lanzara la excepcion de 
+//la variable ya existe.
+void gramaticaDeclararVariable() throws SemanticException:{
+    Token id;
+    Token tipo;
+}{
+    tipo = tipoDato() id = <ID> [ <IGUAL> valores() ]
+    {
+        Variable v = new Variable();
+        v.setId(id.image);
+        v.setTipoDato(tipo.image);
+        addVariable(v);
+    }
+}
+
+Token tipoDato():{
+    Token tipo = null;
+}
+{
+    (tipo = <ENTERO> |tipo = <DECIMAL> | tipo = <CADENA>)
+    {return tipo;}
+}
+
+void gramaticaPrincipal()throws SemanticException:{
+}{
+    <INICIO> <ID> 
+        sentencias()
+    <FIN> 
+}
+
+void sentencias() throws SemanticException:{
+}{
+    (   gramaticaImprimir()
+        |gramaticaDeclararVariable()
+        |gramaticaLeer()
+        |gramaticaIf()
+        |gramaticaMientras()
+        |gramaticaAsignacion()
+        |gramaticaFor()
+    )+    
+}
+
+void gramaticaLeer() throws SemanticException:{
+Token id;
+}{
+    <LEER> <OPP> id = <ID> 
+            { 
+              Variable v = new Variable();
+              v.setId(id.image);
+              variableExiste(v);
+            }
+           <CLP>
+    
+}
+
+void gramaticaIf() throws SemanticException:{
+}{
+    <SI> <OPP> condicion() <CLP> <ENTONCES>
+        sentencias()
+    [<SINO> sentencias()]
+    <FIN> <SI>
+}
+
+void condicion():{
+}{
+    condicionSimple() (opLogico() condicionSimple())* 
+}
+
+void opLogico():{
+}{
+    <AND> | <OR> 
+}
+
+void condicionSimple():{
+}{
+   ( valores() | <ID> ) opRelacional() ( valores()|<ID> )
+}
+
+void opRelacional():{
+}{
+    <MAYOR>[<IGUAL>] | <MENOR>[<IGUAL>] | <IGUAL><IGUAL>
+}
+
+void gramaticaMientras() throws SemanticException:{
+}{
+    <MIENTRAS> <OPP> condicion() <CLP> 
+        sentencias()
+    <FIN> <MIENTRAS>
+}
+
+void gramaticaAsignacion():{
+}{
+    <ID> <IGUAL> operacion()
+}
+
+void operacion():{}
+{
+    ( valores() | <ID> | opParentesis() )
+    (opAritmetico() (valores() | <ID> | opParentesis()))*
+}
+
+void opParentesis():{
+}{
+    <OPP> operacion() <CLP>
+}
+
+void opAritmetico():{}
+{
+    <MAS> | <MENOS> | <MULTI> | <ENTRE> | <MOD>
+}
+
+void gramaticaFor() throws SemanticException:{
+}{
+    <PARA> <ID> <IGUAL> <VALOR_ENTERO> <HASTA> <VALOR_ENTERO>
+        sentencias()
+    <SIGUIENTE>
+}
